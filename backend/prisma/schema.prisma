@@ -10,6 +10,7 @@ datasource db {
 
 model Batch {
   id               String       @id @default(uuid())
+  name             String?
   entryDate        DateTime
   initialBirdCount Int
   currentBirdCount Int
@@ -17,8 +18,9 @@ model Batch {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  feedRecords FeedRecord[]
-  eggRecords  EggRecord[]
+  feedRecords      FeedRecord[]
+  eggRecords       EggRecord[]
+  mortalityRecords MortalityRecord[]
 }
 
 model FeedRecord {
@@ -38,3 +40,14 @@ model EggRecord {
   batch     Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 }
+
+model MortalityRecord {
+  id        String   @id @default(uuid())
+  date      DateTime
+  count     Int
+  cause     String?
+  batchId   String
+  batch     Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+

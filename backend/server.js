@@ -36,6 +36,9 @@ app.get('/api/dashboard', async (req, res) => {
     const eggRes = await db.execute(`SELECT count, date FROM "EggRecord"`);
     const totalEggsCollected = eggRes.rows.reduce((acc, curr) => acc + curr.count, 0);
 
+    const mortRes = await db.execute(`SELECT count, date FROM "MortalityRecord"`);
+    const totalMortality = mortRes.rows.reduce((acc, curr) => acc + curr.count, 0);
+
     // Grouping for Recharts Line Chart trend (Eggs vs Feed over time)
     const trendMap = {};
     const processDate = (isoString) => isoString.split('T')[0];
@@ -58,13 +61,15 @@ app.get('/api/dashboard', async (req, res) => {
     // Get 5 most recent activity items
     const feedActivity = feedRes.rows.map(f => ({ type: 'feed', date: f.date, amount: f.amountKg }));
     const eggActivity = eggRes.rows.map(e => ({ type: 'eggs', date: e.date, amount: e.count }));
-    const allActivity = [...feedActivity, ...eggActivity].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+    const mortalityActivity = mortRes.rows.map(m => ({ type: 'mortality', date: m.date, amount: m.count }));
+    const allActivity = [...feedActivity, ...eggActivity, ...mortalityActivity].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
     res.json({
       activeBatches: activeBatches.length,
       totalChickens,
       totalFeedConsumed,
       totalEggsCollected,
+      totalMortality,
       chartData,
       recentActivity: allActivity
     });
@@ -83,14 +88,14 @@ app.get('/api/batches', async (req, res) => {
 
 app.post('/api/batches', async (req, res) => {
   try {
-    const { entryDate, initialBirdCount } = req.body;
+    const { entryDate, initialBirdCount, name } = req.body;
     const id = uuidv4();
     const count = parseInt(initialBirdCount) || 0;
     await db.execute({
-      sql: `INSERT INTO "Batch" ("id", "entryDate", "initialBirdCount", "currentBirdCount", "isActive") VALUES (?, ?, ?, ?, ?)`,
-      args: [id, new Date(entryDate).toISOString(), count, count, 1]
+      sql: `INSERT INTO "Batch" ("id", "name", "entryDate", "initialBirdCount", "currentBirdCount", "isActive") VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [id, name || null, new Date(entryDate).toISOString(), count, count, 1]
     });
-    res.status(201).json({ id, entryDate, initialBirdCount: count, currentBirdCount: count, isActive: 1 });
+    res.status(201).json({ id, name, entryDate, initialBirdCount: count, currentBirdCount: count, isActive: 1 });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -153,6 +158,52 @@ app.post('/api/eggs', async (req, res) => {
 app.delete('/api/eggs/:id', async (req, res) => {
   try {
     await db.execute({ sql: `DELETE FROM "EggRecord" WHERE "id" = ?`, args: [req.params.id] });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Mortality
+app.get('/api/mortality', async (req, res) => {
+  try {
+    const result = await db.execute(`SELECT * FROM "MortalityRecord" ORDER BY "date" DESC`);
+    const logs = result.rows.map(row => ({ ...row, batch: { id: row.batchId } }));
+    res.json(logs);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/mortality', async (req, res) => {
+  try {
+    const { date, count, cause, batchId } = req.body;
+    const id = uuidv4();
+    const numCount = parseInt(count) || 0;
+    
+    // Transactional-ish approach: Insert record and update batch count
+    await db.execute({
+      sql: `INSERT INTO "MortalityRecord" ("id", "date", "count", "cause", "batchId") VALUES (?, ?, ?, ?, ?)`,
+      args: [id, new Date(date).toISOString(), numCount, cause || null, batchId]
+    });
+    
+    await db.execute({
+      sql: `UPDATE "Batch" SET "currentBirdCount" = "currentBirdCount" - ? WHERE "id" = ?`,
+      args: [numCount, batchId]
+    });
+
+    res.status(201).json({ id, date, count: numCount, cause, batchId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/mortality/:id', async (req, res) => {
+  try {
+    // Get the record first to know how many birds to restore
+    const record = await db.execute({ sql: `SELECT count, batchId FROM "MortalityRecord" WHERE "id" = ?`, args: [req.params.id] });
+    if (record.rows.length > 0) {
+      const { count, batchId } = record.rows[0];
+      await db.execute({
+        sql: `UPDATE "Batch" SET "currentBirdCount" = "currentBirdCount" + ? WHERE "id" = ?`,
+        args: [count, batchId]
+      });
+    }
+    await db.execute({ sql: `DELETE FROM "MortalityRecord" WHERE "id" = ?`, args: [req.params.id] });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

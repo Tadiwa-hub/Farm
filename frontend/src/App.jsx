@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Package, Wheat, Egg, Menu, X, Trash2, Activity } from 'lucide-react';
+import { LayoutDashboard, Package, Wheat, Egg, Menu, X, Trash2, Activity, Skull, Clock } from 'lucide-react';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -29,10 +29,11 @@ const Dashboard = () => {
         {[
           { label: "Active Batches", val: data.activeBatches, icon: <Package className="text-amber-500"/>, color: "from-amber-500/20" },
           { label: "Total Chickens", val: data.totalChickens, icon: <Activity className="text-emerald-500"/>, color: "from-emerald-500/20" },
-          { label: "Feed Consumed (Kg)", val: data.totalFeedConsumed, icon: <Wheat className="text-sky-500"/>, color: "from-sky-500/20" },
+          { label: "Feed Consumed", val: `${data.totalFeedConsumed}kg`, icon: <Wheat className="text-sky-500"/>, color: "from-sky-500/20" },
           { label: "Total Eggs", val: data.totalEggsCollected, icon: <Egg className="text-orange-500"/>, color: "from-orange-500/20" },
+          { label: "Total Losses", val: data.totalMortality, icon: <Skull className="text-red-500"/>, color: "from-red-500/20" },
         ].map((m, i) => (
-          <div key={i} className={`bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700/50 bg-gradient-to-br ${m.color} to-transparent relative overflow-hidden group hover:border-amber-500/30 transition-all duration-300`}>
+          <div key={i} className={`bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700/50 bg-gradient-to-br ${m.color} to-transparent relative overflow-hidden group hover:border-amber-500/30 transition-all duration-300 ${i === 4 ? 'sm:col-span-2 lg:col-span-1' : ''}`}>
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-slate-400 font-medium text-sm mb-1">{m.label}</h3>
@@ -60,10 +61,10 @@ const Dashboard = () => {
             <div className="p-3 bg-emerald-500/10 rounded-full text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Package size={24}/></div>
             <span className="text-sm font-semibold text-slate-300">New Batch</span>
           </Link>
-          <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3 border-dashed">
-            <div className="p-3 bg-slate-700/20 rounded-full text-slate-500"><Activity size={24}/></div>
-            <span className="text-sm font-semibold text-slate-500 italic">More Soon</span>
-          </div>
+          <Link to="/mortality" className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-red-500/50 transition-all flex flex-col items-center gap-3 group shadow-md">
+            <div className="p-3 bg-red-500/10 rounded-full text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors"><Skull size={24}/></div>
+            <span className="text-sm font-semibold text-slate-300">Record Loss</span>
+          </Link>
         </div>
       </div>
 
@@ -101,11 +102,19 @@ const Dashboard = () => {
           <div className="flex flex-col">
             {data.recentActivity && data.recentActivity.map((act, i) => (
               <div key={i} className="p-4 border-b border-slate-700/50 flex items-center gap-3">
-                <div className={`p-2 rounded-full ${act.type === 'feed' ? 'bg-sky-500/10 text-sky-500' : 'bg-amber-500/10 text-amber-500'}`}>
-                  {act.type === 'feed' ? <Wheat size={16} /> : <Egg size={16}/>}
+                <div className={`p-2 rounded-full ${
+                  act.type === 'feed' ? 'bg-sky-500/10 text-sky-500' : 
+                  act.type === 'eggs' ? 'bg-amber-500/10 text-amber-500' :
+                  'bg-red-500/10 text-red-500'
+                }`}>
+                  {act.type === 'feed' ? <Wheat size={16} /> : act.type === 'eggs' ? <Egg size={16}/> : <Skull size={16}/>}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-white">{act.type === 'feed' ? `Logged ${act.amount} Kg of Feed` : `Collected ${act.amount} Eggs`}</p>
+                  <p className="text-sm font-medium text-white">
+                    {act.type === 'feed' ? `Logged ${act.amount} Kg of Feed` : 
+                     act.type === 'eggs' ? `Collected ${act.amount} Eggs` :
+                     `Recorded ${act.amount} Bird Losses`}
+                  </p>
                   <p className="text-xs text-slate-400">{new Date(act.date).toLocaleDateString()}</p>
                 </div>
               </div>
@@ -122,7 +131,7 @@ const Dashboard = () => {
 
 const Batches = () => {
   const [batches, setBatches] = useState([]);
-  const [form, setForm] = useState({ entryDate: getTodayDate(), initialBirdCount: '' });
+  const [form, setForm] = useState({ entryDate: getTodayDate(), initialBirdCount: '', name: '' });
 
   useEffect(() => { loadBatches(); }, []);
   const loadBatches = () => api.get('/batches').then(res => setBatches(res.data)).catch(console.error);
@@ -130,7 +139,7 @@ const Batches = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     api.post('/batches', form).then(() => {
-      setForm({ entryDate: getTodayDate(), initialBirdCount: '' });
+      setForm({ entryDate: getTodayDate(), initialBirdCount: '', name: '' });
       loadBatches();
     });
   };
@@ -144,37 +153,50 @@ const Batches = () => {
   return (
     <div>
       <h1 className="text-2xl md:text-3xl font-bold mb-6 text-amber-500">Batch Management</h1>
-      <form onSubmit={handleSubmit} className="bg-slate-800 p-4 md:p-6 rounded-lg mb-8 flex flex-col sm:flex-row gap-4 sm:items-end border border-slate-700">
-        <div className="w-full sm:w-auto flex-1">
+      <form onSubmit={handleSubmit} className="bg-slate-800 p-4 md:p-6 rounded-lg mb-8 flex flex-col md:flex-row gap-4 md:items-end border border-slate-700">
+        <div className="flex-1">
+          <label className="block text-sm mb-1 text-slate-400 font-medium">Batch Name</label>
+          <input type="text" placeholder="e.g. Batch A" className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+        </div>
+        <div className="w-full md:w-48">
           <label className="block text-sm mb-1 text-slate-400 font-medium">Entry Date</label>
           <input type="date" required className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.entryDate} onChange={e => setForm({...form, entryDate: e.target.value})} />
         </div>
-        <div className="w-full sm:w-auto flex-1">
-          <label className="block text-sm mb-1 text-slate-400 font-medium">Initial Bird Count</label>
+        <div className="w-full md:w-48">
+          <label className="block text-sm mb-1 text-slate-400 font-medium">Initial Birds</label>
           <input type="number" required min="1" className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.initialBirdCount} onChange={e => setForm({...form, initialBirdCount: e.target.value})} />
         </div>
-        <button className="bg-amber-600 hover:bg-amber-500 text-white p-2.5 rounded sm:px-8 transition-colors font-semibold w-full sm:w-auto shadow-md">Add Batch</button>
+        <button className="bg-amber-600 hover:bg-amber-500 text-white p-2.5 rounded md:px-8 transition-colors font-semibold w-full md:w-auto shadow-md">Add Batch</button>
       </form>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {batches.map(b => (
-          <div key={b.id} className="bg-slate-800 p-6 rounded-lg border border-slate-700 relative overflow-hidden shadow group">
-            <div className={`absolute top-0 left-0 w-1.5 h-full ${b.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <div className="flex justify-between items-start mb-2">
-              <h3 className="font-bold text-lg text-white">Batch {b.id.substring(0,6).toUpperCase()}</h3>
-              <button onClick={() => handleDelete(b.id)} className="text-slate-500 hover:text-red-500 transition-colors p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100" title="Delete Batch">
-                <Trash2 size={18} />
-              </button>
+        {batches.map(b => {
+          const age = Math.floor((new Date() - new Date(b.entryDate)) / (1000 * 60 * 60 * 24));
+          return (
+            <div key={b.id} className="bg-slate-800 p-6 rounded-lg border border-slate-700 relative overflow-hidden shadow group">
+              <div className={`absolute top-0 left-0 w-1.5 h-full ${b.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="font-bold text-xl text-white">{b.name || `Batch ${b.id.substring(0,6).toUpperCase()}`}</h3>
+                <button onClick={() => handleDelete(b.id)} className="text-slate-500 hover:text-red-500 transition-colors p-1" title="Delete Batch">
+                  <Trash2 size={18} />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-slate-400">
+                  <span className="text-sm">Current Stock:</span>
+                  <span className="font-bold text-white text-lg">{b.currentBirdCount} / {b.initialBirdCount}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <Clock size={14} className="text-amber-500"/>
+                  <span>Age: <span className="text-white font-medium">{age} days</span></span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <div className="w-2 h-2 rounded-full bg-slate-500"></div>
+                  <span>Entered: {new Date(b.entryDate).toLocaleDateString()}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between items-center text-slate-300 mb-1">
-              <span>Current Birds:</span>
-              <span className="font-medium text-white">{b.currentBirdCount} / {b.initialBirdCount}</span>
-            </div>
-            <p className="text-sm text-slate-400 mt-2 flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-slate-500"></span>
-              Entered: {new Date(b.entryDate).toLocaleDateString()}
-            </p>
-          </div>
-        ))}
+          );
+        })}
         {batches.length === 0 && <div className="col-span-full text-center py-10 text-slate-500 bg-slate-800/50 rounded-lg border border-slate-700/50 border-dashed">No batches found. Add your first batch above.</div>}
       </div>
     </div>
@@ -216,7 +238,7 @@ const Feed = () => {
           <label className="block text-sm mb-1 text-slate-400 font-medium">Batch</label>
           <select required className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.batchId} onChange={e => setForm({...form, batchId: e.target.value})}>
             <option value="">Select Batch</option>
-            {batches.map(b => <option key={b.id} value={b.id}>{b.id.substring(0,6).toUpperCase()}</option>)}
+            {batches.map(b => <option key={b.id} value={b.id}>{b.name || b.id.substring(0,6).toUpperCase()}</option>)}
           </select>
         </div>
         <button className="bg-amber-600 hover:bg-amber-500 text-white p-2.5 rounded sm:px-6 transition-colors font-semibold w-full sm:w-auto shadow-md">Log Feed</button>
@@ -228,7 +250,7 @@ const Feed = () => {
             <div key={log.id} className={`p-4 md:p-6 flex justify-between items-center ${i !== feedLogs.length - 1 ? 'border-b border-slate-700' : ''} hover:bg-slate-750 transition-colors group`}>
               <div>
                 <span className="font-medium text-white block md:inline mr-3">{new Date(log.date).toLocaleDateString()}</span>
-                <span className="text-sm text-slate-400 bg-slate-900 px-2.5 py-1 rounded border border-slate-700">Batch {log.batch?.id?.substring(0,6).toUpperCase()}</span>
+                <span className="text-sm text-slate-400 bg-slate-900 px-2.5 py-1 rounded border border-slate-700">{batches.find(b => b.id === log.batchId)?.name || `Batch ${log.batchId?.substring(0,6).toUpperCase()}`}</span>
               </div>
               <div className="flex items-center gap-4">
                 <span className="font-bold text-sky-400 bg-sky-500/10 px-3 py-1 rounded-full">{log.amountKg} Kg</span>
@@ -278,7 +300,7 @@ const Eggs = () => {
             <label className="block text-sm mb-1 text-slate-400 font-medium">Batch</label>
             <select required className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.batchId} onChange={e => setForm({...form, batchId: e.target.value})}>
               <option value="">Select Batch</option>
-              {batches.map(b => <option key={b.id} value={b.id}>{b.id.substring(0,6).toUpperCase()}</option>)}
+              {batches.map(b => <option key={b.id} value={b.id}>{b.name || b.id.substring(0,6).toUpperCase()}</option>)}
             </select>
           </div>
           <button className="bg-amber-600 hover:bg-amber-500 text-white p-2.5 rounded sm:px-6 transition-colors font-semibold w-full sm:w-auto shadow-md">Log Eggs</button>
@@ -290,7 +312,7 @@ const Eggs = () => {
               <div key={log.id} className={`p-4 md:p-6 flex justify-between items-center ${i !== eggLogs.length - 1 ? 'border-b border-slate-700' : ''} hover:bg-slate-750 transition-colors group`}>
                 <div>
                   <span className="font-medium text-white block md:inline mr-3">{new Date(log.date).toLocaleDateString()}</span>
-                  <span className="text-sm text-slate-400 bg-slate-900 px-2.5 py-1 rounded border border-slate-700">Batch {log.batch?.id?.substring(0,6).toUpperCase()}</span>
+                  <span className="text-sm text-slate-400 bg-slate-900 px-2.5 py-1 rounded border border-slate-700">{batches.find(b => b.id === log.batchId)?.name || `Batch ${log.batchId?.substring(0,6).toUpperCase()}`}</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full">{log.count} eggs</span>
@@ -299,6 +321,72 @@ const Eggs = () => {
               </div>
             ))}
             {eggLogs.length === 0 && <div className="p-8 text-center text-slate-500">No records found.</div>}
+          </div>
+        </div>
+      </div>
+    );
+};
+
+const Mortality = () => {
+    const [mortalityLogs, setMortalityLogs] = useState([]);
+    const [batches, setBatches] = useState([]);
+    const [form, setForm] = useState({ date: getTodayDate(), count: '', cause: '', batchId: '' });
+  
+    useEffect(() => { loadData(); }, []);
+    const loadData = () => {
+      api.get('/mortality').then(res => setMortalityLogs(res.data));
+      api.get('/batches').then(res => setBatches(res.data));
+    }
+  
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      api.post('/mortality', form).then(() => {
+        setForm({ date: getTodayDate(), count: '', cause: '', batchId: form.batchId });
+        loadData();
+      });
+    };
+
+    const handleDelete = (id) => {
+      if(window.confirm("Delete this mortality record? This will restore the bird count.")) {
+        api.delete(`/mortality/${id}`).then(() => loadData());
+      }
+    };
+  
+    return (
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold mb-6 text-red-500">Mortality Tracking</h1>
+        <form onSubmit={handleSubmit} className="bg-slate-800 p-4 md:p-6 rounded-lg mb-8 flex flex-col md:flex-row gap-4 md:items-end border border-slate-700">
+          <div className="w-full md:w-48"><label className="block text-sm mb-1 text-slate-400 font-medium">Date</label><input type="date" required className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.date} onChange={e => setForm({...form, date: e.target.value})} /></div>
+          <div className="w-full md:w-32"><label className="block text-sm mb-1 text-slate-400 font-medium">Losses</label><input type="number" required className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.count} onChange={e => setForm({...form, count: e.target.value})} /></div>
+          <div className="flex-1">
+            <label className="block text-sm mb-1 text-slate-400 font-medium">Batch</label>
+            <select required className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.batchId} onChange={e => setForm({...form, batchId: e.target.value})}>
+              <option value="">Select Batch</option>
+              {batches.map(b => <option key={b.id} value={b.id}>{b.name || b.id.substring(0,6).toUpperCase()}</option>)}
+            </select>
+          </div>
+          <div className="flex-1"><label className="block text-sm mb-1 text-slate-400 font-medium">Cause (Optional)</label><input type="text" placeholder="e.g. Heat stress" className="bg-slate-900 p-2.5 rounded w-full border border-slate-600 focus:border-amber-500 outline-none text-white" value={form.cause} onChange={e => setForm({...form, cause: e.target.value})} /></div>
+          <button className="bg-red-600 hover:bg-red-500 text-white p-2.5 rounded md:px-6 transition-colors font-semibold w-full md:w-auto shadow-md">Record Loss</button>
+        </form>
+        <div className="bg-slate-800 rounded-lg p-0 border border-slate-700 overflow-hidden shadow">
+          <div className="p-4 md:p-6 border-b border-slate-700 bg-slate-800/80"><h3 className="font-bold text-white text-lg">Mortality History</h3></div>
+          <div className="flex flex-col">
+            {mortalityLogs.map((log, i) => (
+              <div key={log.id} className={`p-4 md:p-6 flex justify-between items-center ${i !== mortalityLogs.length - 1 ? 'border-b border-slate-700' : ''} hover:bg-slate-750 transition-colors group`}>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium text-white">{new Date(log.date).toLocaleDateString()}</span>
+                    <span className="text-xs text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">{batches.find(b => b.id === log.batchId)?.name || `Batch ${log.batchId?.substring(0,6).toUpperCase()}`}</span>
+                  </div>
+                  {log.cause && <p className="text-xs text-slate-500 mt-1">Cause: {log.cause}</p>}
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="font-bold text-red-400 bg-red-500/10 px-3 py-1 rounded-full">-{log.count} birds</span>
+                  <button onClick={() => handleDelete(log.id)} className="text-slate-500 hover:text-red-500 transition-all p-1" title="Delete"><Trash2 size={18}/></button>
+                </div>
+              </div>
+            ))}
+            {mortalityLogs.length === 0 && <div className="p-8 text-center text-slate-500">No mortality records.</div>}
           </div>
         </div>
       </div>
@@ -315,7 +403,8 @@ const Layout = ({ children }) => {
     { to: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard" },
     { to: "/batches", icon: <Package size={20} />, label: "Batches" },
     { to: "/feed", icon: <Wheat size={20} />, label: "Feed Mgmt" },
-    { to: "/eggs", icon: <Egg size={20} />, label: "Egg Tracking" }
+    { to: "/eggs", icon: <Egg size={20} />, label: "Egg Tracking" },
+    { to: "/mortality", icon: <Skull size={20} />, label: "Mortality" }
   ];
 
   return (
@@ -357,7 +446,7 @@ const Layout = ({ children }) => {
 
 function App() {
   return (
-    <Router><Layout><Routes><Route path="/" element={<Dashboard />} /><Route path="/batches" element={<Batches />} /><Route path="/feed" element={<Feed />} /><Route path="/eggs" element={<Eggs />} /></Routes></Layout></Router>
+    <Router><Layout><Routes><Route path="/" element={<Dashboard />} /><Route path="/batches" element={<Batches />} /><Route path="/feed" element={<Feed />} /><Route path="/eggs" element={<Eggs />} /><Route path="/mortality" element={<Mortality />} /></Routes></Layout></Router>
   );
 }
 
