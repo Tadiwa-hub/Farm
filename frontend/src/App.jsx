@@ -7,6 +7,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const api = axios.create({ baseURL: API_URL });
 
+const getTodayDate = () => new Date().toISOString().split('T')[0];
+
 const Dashboard = () => {
   const [data, setData] = useState(null);
   
@@ -24,10 +26,45 @@ const Dashboard = () => {
       
       {/* Top Level Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-        <div className="bg-slate-800 p-6 rounded-lg shadow border border-slate-700"><h3 className="text-slate-400 font-medium">Active Batches</h3><p className="text-3xl md:text-4xl font-bold mt-2 text-white">{data.activeBatches}</p></div>
-        <div className="bg-slate-800 p-6 rounded-lg shadow border border-slate-700"><h3 className="text-slate-400 font-medium">Total Chickens</h3><p className="text-3xl md:text-4xl font-bold mt-2 text-white">{data.totalChickens}</p></div>
-        <div className="bg-slate-800 p-6 rounded-lg shadow border border-slate-700"><h3 className="text-slate-400 font-medium">Feed Consumed (Kg)</h3><p className="text-3xl md:text-4xl font-bold mt-2 text-white">{data.totalFeedConsumed}</p></div>
-        <div className="bg-slate-800 p-6 rounded-lg shadow border border-slate-700"><h3 className="text-slate-400 font-medium">Total Eggs</h3><p className="text-3xl md:text-4xl font-bold mt-2 text-white">{data.totalEggsCollected}</p></div>
+        {[
+          { label: "Active Batches", val: data.activeBatches, icon: <Package className="text-amber-500"/>, color: "from-amber-500/20" },
+          { label: "Total Chickens", val: data.totalChickens, icon: <Activity className="text-emerald-500"/>, color: "from-emerald-500/20" },
+          { label: "Feed Consumed (Kg)", val: data.totalFeedConsumed, icon: <Wheat className="text-sky-500"/>, color: "from-sky-500/20" },
+          { label: "Total Eggs", val: data.totalEggsCollected, icon: <Egg className="text-orange-500"/>, color: "from-orange-500/20" },
+        ].map((m, i) => (
+          <div key={i} className={`bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700/50 bg-gradient-to-br ${m.color} to-transparent relative overflow-hidden group hover:border-amber-500/30 transition-all duration-300`}>
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-slate-400 font-medium text-sm mb-1">{m.label}</h3>
+                <p className="text-3xl font-bold text-white tracking-tight">{m.val}</p>
+              </div>
+              <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-700 group-hover:scale-110 transition-transform">{m.icon}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mb-8">
+        <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">Quick Actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Link to="/eggs" className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-amber-500/50 transition-all flex flex-col items-center gap-3 group shadow-md">
+            <div className="p-3 bg-amber-500/10 rounded-full text-amber-500 group-hover:bg-amber-500 group-hover:text-white transition-colors"><Egg size={24}/></div>
+            <span className="text-sm font-semibold text-slate-300">Log Eggs</span>
+          </Link>
+          <Link to="/feed" className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-sky-500/50 transition-all flex flex-col items-center gap-3 group shadow-md">
+            <div className="p-3 bg-sky-500/10 rounded-full text-sky-500 group-hover:bg-sky-500 group-hover:text-white transition-colors"><Wheat size={24}/></div>
+            <span className="text-sm font-semibold text-slate-300">Log Feed</span>
+          </Link>
+          <Link to="/batches" className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-emerald-500/50 transition-all flex flex-col items-center gap-3 group shadow-md">
+            <div className="p-3 bg-emerald-500/10 rounded-full text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Package size={24}/></div>
+            <span className="text-sm font-semibold text-slate-300">New Batch</span>
+          </Link>
+          <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col items-center gap-3 border-dashed">
+            <div className="p-3 bg-slate-700/20 rounded-full text-slate-500"><Activity size={24}/></div>
+            <span className="text-sm font-semibold text-slate-500 italic">More Soon</span>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -85,7 +122,7 @@ const Dashboard = () => {
 
 const Batches = () => {
   const [batches, setBatches] = useState([]);
-  const [form, setForm] = useState({ entryDate: '', initialBirdCount: '' });
+  const [form, setForm] = useState({ entryDate: getTodayDate(), initialBirdCount: '' });
 
   useEffect(() => { loadBatches(); }, []);
   const loadBatches = () => api.get('/batches').then(res => setBatches(res.data)).catch(console.error);
@@ -93,7 +130,7 @@ const Batches = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     api.post('/batches', form).then(() => {
-      setForm({ entryDate: '', initialBirdCount: '' });
+      setForm({ entryDate: getTodayDate(), initialBirdCount: '' });
       loadBatches();
     });
   };
@@ -124,7 +161,7 @@ const Batches = () => {
             <div className={`absolute top-0 left-0 w-1.5 h-full ${b.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
             <div className="flex justify-between items-start mb-2">
               <h3 className="font-bold text-lg text-white">Batch {b.id.substring(0,6).toUpperCase()}</h3>
-              <button onClick={() => handleDelete(b.id)} className="text-slate-500 hover:text-red-500 transition-colors p-1 opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete Batch">
+              <button onClick={() => handleDelete(b.id)} className="text-slate-500 hover:text-red-500 transition-colors p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100" title="Delete Batch">
                 <Trash2 size={18} />
               </button>
             </div>
@@ -147,7 +184,7 @@ const Batches = () => {
 const Feed = () => {
   const [feedLogs, setFeedLogs] = useState([]);
   const [batches, setBatches] = useState([]);
-  const [form, setForm] = useState({ date: '', amountKg: '', batchId: '' });
+  const [form, setForm] = useState({ date: getTodayDate(), amountKg: '', batchId: '' });
 
   useEffect(() => { loadData(); }, []);
   const loadData = () => {
@@ -158,7 +195,7 @@ const Feed = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     api.post('/feed', form).then(() => {
-      setForm({ date: '', amountKg: '', batchId: form.batchId });
+      setForm({ date: getTodayDate(), amountKg: '', batchId: form.batchId });
       loadData();
     });
   };
@@ -195,7 +232,7 @@ const Feed = () => {
               </div>
               <div className="flex items-center gap-4">
                 <span className="font-bold text-sky-400 bg-sky-500/10 px-3 py-1 rounded-full">{log.amountKg} Kg</span>
-                <button onClick={() => handleDelete(log.id)} className="text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1" title="Delete"><Trash2 size={18}/></button>
+                <button onClick={() => handleDelete(log.id)} className="text-slate-500 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all p-1" title="Delete"><Trash2 size={18}/></button>
               </div>
             </div>
           ))}
@@ -209,7 +246,7 @@ const Feed = () => {
 const Eggs = () => {
     const [eggLogs, setEggLogs] = useState([]);
     const [batches, setBatches] = useState([]);
-    const [form, setForm] = useState({ date: '', count: '', batchId: '' });
+    const [form, setForm] = useState({ date: getTodayDate(), count: '', batchId: '' });
   
     useEffect(() => { loadData(); }, []);
     const loadData = () => {
@@ -220,7 +257,7 @@ const Eggs = () => {
     const handleSubmit = (e) => {
       e.preventDefault();
       api.post('/eggs', form).then(() => {
-        setForm({ date: '', count: '', batchId: form.batchId });
+        setForm({ date: getTodayDate(), count: '', batchId: form.batchId });
         loadData();
       });
     };
@@ -257,7 +294,7 @@ const Eggs = () => {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full">{log.count} eggs</span>
-                  <button onClick={() => handleDelete(log.id)} className="text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1" title="Delete"><Trash2 size={18}/></button>
+                  <button onClick={() => handleDelete(log.id)} className="text-slate-500 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all p-1" title="Delete"><Trash2 size={18}/></button>
                 </div>
               </div>
             ))}
@@ -300,10 +337,20 @@ const Layout = ({ children }) => {
         </nav>
       </aside>
       <main className="flex-1 overflow-y-auto w-full pt-20 md:pt-0 bg-slate-900">
-        <div className="p-4 md:p-8 max-w-6xl mx-auto w-full pb-24">
+        <div className="p-4 md:p-8 max-w-6xl mx-auto w-full pb-32 md:pb-24">
           {children}
         </div>
       </main>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] bg-slate-800/80 backdrop-blur-xl border border-white/10 h-16 rounded-2xl z-30 flex items-center justify-around px-4 shadow-2xl shadow-black/50">
+        {navLinks.map((link) => (
+          <Link key={link.to} to={link.to} className={`relative flex flex-col items-center justify-center gap-1 transition-all duration-300 ${location.pathname === link.to ? 'text-amber-500 scale-110' : 'text-slate-500 hover:text-slate-300'}`}>
+            {location.pathname === link.to && <div className="absolute -top-3 w-8 h-1 bg-amber-500 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)]" />}
+            {link.icon}
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 };
