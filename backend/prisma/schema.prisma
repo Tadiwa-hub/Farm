@@ -1,0 +1,40 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Batch {
+  id               String       @id @default(uuid())
+  entryDate        DateTime
+  initialBirdCount Int
+  currentBirdCount Int
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  feedRecords FeedRecord[]
+  eggRecords  EggRecord[]
+}
+
+model FeedRecord {
+  id        String   @id @default(uuid())
+  date      DateTime
+  amountKg  Float
+  batchId   String
+  batch     Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model EggRecord {
+  id        String   @id @default(uuid())
+  date      DateTime
+  count     Int
+  batchId   String
+  batch     Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
